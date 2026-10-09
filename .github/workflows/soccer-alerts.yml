@@ -1,0 +1,40 @@
+name: Soccer alerts
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"     # every 5 minutes (GitHub runs can lag a few minutes)
+  workflow_dispatch:           # adds a "Run workflow" button for testing
+
+permissions:
+  contents: write              # lets the job remember which alerts it already sent
+
+concurrency:
+  group: soccer-alerts
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Check matches
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          APIFOOTBALL_KEY: ${{ secrets.APIFOOTBALL_KEY }}
+        run: python soccer_alerts.py
+
+      - name: Save state
+        run: |
+          git config user.name "soccer-alerts-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add soccer_sent.json 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "Update soccer alert state"
+          git pull --rebase && git push
